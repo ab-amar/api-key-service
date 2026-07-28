@@ -1,10 +1,10 @@
 # API Key Service Learning Task List
 
 1. Initialize the Go module for the project
+2. Start a minimal HTTP server with Chi
 
 -----------------------------------------
 
-2. Start a minimal HTTP server with Chi
 3. Add `/health` and `/ready` endpoints
 4. Add method checking and explicit response headers
 5. Introduce a dedicated server setup function to keep `main.go` small
