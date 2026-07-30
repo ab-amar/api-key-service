@@ -5,15 +5,17 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/ab-amar/api-key-service/internal/config"
 	"github.com/go-chi/chi/v5"
 )
 
 func main() {
+	cfg := config.Load()
 	router := setupRouter()
 
-	log.Println("server listening on :8080")
+	log.Printf("server listening on %s", cfg.Addr())
 
-	if err := http.ListenAndServe(":8080", router); err != nil {
+	if err := http.ListenAndServe(cfg.Addr(), router); err != nil {
 		log.Fatal(err)
 	}
 }
