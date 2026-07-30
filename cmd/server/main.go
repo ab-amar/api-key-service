@@ -9,6 +9,16 @@ import (
 )
 
 func main() {
+	router := setupRouter()
+
+	log.Println("server listening on :8080")
+
+	if err := http.ListenAndServe(":8080", router); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func setupRouter() http.Handler {
 	router := chi.NewRouter()
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
@@ -35,9 +45,5 @@ func main() {
 		fmt.Fprintln(w, "ready")
 	})
 
-	log.Println("server listening on :8080")
-
-	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Fatal(err)
-	}
+	return router
 }
