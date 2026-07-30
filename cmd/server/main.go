@@ -11,6 +11,10 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid config: %v", err)
+	}
+
 	router := setupRouter()
 
 	log.Printf("server listening on %s", cfg.Addr())
