@@ -6,10 +6,10 @@
 4. Add method checking and explicit response headers
 5. Introduce a dedicated server setup function to keep `main.go` small
 6. Add basic configuration for the server port
+7. Read configuration from environment variables
 
 -----------------------------------------
 
-7. Read configuration from environment variables
 8. Validate configuration at startup
 9. Add graceful shutdown support
 10. Add a root endpoint to explain what the service is
