@@ -66,6 +66,7 @@ func setupRouter() http.Handler {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "API Key Service")
+		fmt.Fprintln(w, "Use GET /health for liveness and GET /ready for readiness.")
 	})
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
