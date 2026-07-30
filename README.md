@@ -1,36 +1,79 @@
 # API Key Service
 
-Production-oriented Go backend project for learning API key management, secure key storage, authentication middleware, and rate limiting.
+Production-oriented Go backend service for issuing, validating, revoking, and protecting API keys with PostgreSQL persistence, hashed key storage, Chi routing, authentication middleware, token bucket rate limiting, structured logging, metrics, and CI.
 
-## Project Structure
+## Features
 
-- `cmd/server` - application entry point
-- `internal/handler` - HTTP handlers
-- `internal/service` - business logic
-- `internal/repository` - persistence layer
-- `internal/model` - core data models
-- `internal/config` - configuration loading and validation
-- `internal/middleware` - HTTP middleware
-- `internal/metrics` - application metrics
-- `docs` - learning notes and task list
-- `scripts` - helper scripts
-- `migrations` - SQL migrations
+- Create API keys and return the raw key only once.
+- Store only SHA-256 key hashes plus short key prefixes.
+- Validate and revoke API keys through REST endpoints.
+- Protect routes with `Authorization: Bearer <api_key>`.
+- Enforce per-key in-memory token bucket rate limiting.
+- Expose health, readiness, and metrics endpoints.
+- Use PostgreSQL, SQL migrations, integration tests, and GitHub Actions CI.
 
-See [docs/task-list.md](/Users/amarbehera/go/api-key-service/docs/task-list.md) for the implementation roadmap.
+## Tech Stack
 
-Concept notes for the removed discussion/design topics live in:
+- Go
+- Chi
+- PostgreSQL
+- pgx
+- log/slog
+- GitHub Actions
 
-- [docs/context-and-lifecycle.md](/Users/amarbehera/go/api-key-service/docs/context-and-lifecycle.md)
-- [docs/api-key-generation.md](/Users/amarbehera/go/api-key-service/docs/api-key-generation.md)
-- [docs/interfaces-and-dependencies.md](/Users/amarbehera/go/api-key-service/docs/interfaces-and-dependencies.md)
-- [docs/hashing-vs-encryption.md](/Users/amarbehera/go/api-key-service/docs/hashing-vs-encryption.md)
-- [docs/testing-notes.md](/Users/amarbehera/go/api-key-service/docs/testing-notes.md)
-- [docs/server-timeouts.md](/Users/amarbehera/go/api-key-service/docs/server-timeouts.md)
-- [docs/persistence-notes.md](/Users/amarbehera/go/api-key-service/docs/persistence-notes.md)
-- [docs/postgres-concepts.md](/Users/amarbehera/go/api-key-service/docs/postgres-concepts.md)
-- [docs/schema-and-indexes.md](/Users/amarbehera/go/api-key-service/docs/schema-and-indexes.md)
-- [docs/repository-comparison.md](/Users/amarbehera/go/api-key-service/docs/repository-comparison.md)
-- [docs/api-key-auth-notes.md](/Users/amarbehera/go/api-key-service/docs/api-key-auth-notes.md)
-- [docs/rate-limiting-notes.md](/Users/amarbehera/go/api-key-service/docs/rate-limiting-notes.md)
-- [docs/rate-limiting-algorithms.md](/Users/amarbehera/go/api-key-service/docs/rate-limiting-algorithms.md)
-- [docs/observability.md](/Users/amarbehera/go/api-key-service/docs/observability.md)
+## Run Locally
+
+Create a PostgreSQL database and apply the migration:
+
+```bash
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/api_key_service?sslmode=disable"
+psql "$DATABASE_URL" -f migrations/000001_create_api_keys_table.up.sql
+```
+
+Start the server:
+
+```bash
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/api_key_service?sslmode=disable"
+export PORT=8080
+go run ./cmd/server
+```
+
+Create a key:
+
+```bash
+curl -i -X POST http://localhost:8080/keys \
+  -H "Content-Type: application/json" \
+  -d '{"name":"billing-service"}'
+```
+
+Use the returned key:
+
+```bash
+curl -i http://localhost:8080/v1/protected \
+  -H "Authorization: Bearer ak_replace_with_created_key"
+```
+
+Run tests:
+
+```bash
+go test ./...
+```
+
+## API
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness check |
+| `GET` | `/ready` | PostgreSQL readiness check |
+| `POST` | `/keys` | Create an API key |
+| `POST` | `/auth/validate` | Validate an API key |
+| `POST` | `/keys/{id}/revoke` | Revoke an API key |
+| `GET` | `/v1/protected` | Authenticated, rate-limited example route |
+| `GET` | `/metrics` | In-memory service counters |
+
+## Documentation
+
+- [API reference](docs/api.md)
+- [Architecture](docs/architecture.md)
+- [Local development](docs/local-development.md)
+- [Task list](docs/task-list.md)

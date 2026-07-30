@@ -53,3 +53,5 @@
 48. Add GitHub Actions for formatting and tests
 49. Add API documentation
 50. Write a design doc for the project architecture
+
+-----------------------------------------

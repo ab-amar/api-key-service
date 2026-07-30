@@ -2,27 +2,51 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/ab-amar/api-key-service/internal/config"
+	"github.com/ab-amar/api-key-service/internal/handler"
+	"github.com/ab-amar/api-key-service/internal/metrics"
+	"github.com/ab-amar/api-key-service/internal/middleware"
+	"github.com/ab-amar/api-key-service/internal/repository"
+	"github.com/ab-amar/api-key-service/internal/service"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid config: %v", err)
 	}
 
-	router := setupRouter()
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("connect postgres: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("ping postgres: %v", err)
+	}
+
+	repo := repository.NewPostgresRepository(pool)
+	apiKeyService := service.NewAPIKeyService(repo)
+	appMetrics := metrics.New()
+	router := setupRouter(apiKeyService, appMetrics, pool, logger)
 	server := &http.Server{
-		Addr:    cfg.Addr(),
-		Handler: router,
+		Addr:         cfg.Addr(),
+		Handler:      router,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		IdleTimeout:  cfg.IdleTimeout,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -30,7 +54,7 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Printf("server listening on %s", cfg.Addr())
+		logger.Info("server listening", "addr", cfg.Addr())
 		serverErr <- server.ListenAndServe()
 	}()
 
@@ -40,46 +64,35 @@ func main() {
 			log.Fatal(err)
 		}
 	case <-ctx.Done():
-		log.Println("shutdown signal received")
+		logger.Info("shutdown signal received")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("server shutdown failed: %v", err)
 	}
 
-	log.Println("server stopped")
+	logger.Info("server stopped")
 }
 
-func setupRouter() http.Handler {
+func setupRouter(apiKeyService *service.APIKeyService, appMetrics *metrics.Metrics, readiness handler.ReadinessChecker, logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RequestLogger(logger, appMetrics))
+	router.Use(middleware.Recover(logger))
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		fmt.Fprintln(w, "method not allowed")
 	})
 
-	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "API Key Service")
-		fmt.Fprintln(w, "Use GET /health for liveness and GET /ready for readiness.")
-	})
-
-	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "healthy")
-	})
-
-	router.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ready")
-	})
+	apiHandler := handler.New(apiKeyService, appMetrics, readiness)
+	limiter := middleware.NewTokenBucketLimiter(5, 1, appMetrics)
+	apiHandler.RegisterRoutes(router)
+	router.With(middleware.Authenticate(apiKeyService), limiter.Middleware).Get("/v1/protected", handler.ProtectedResource)
 
 	return router
 }

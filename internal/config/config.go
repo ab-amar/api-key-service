@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
-	Port string
+	Port            string
+	DatabaseURL     string
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	IdleTimeout     time.Duration
+	ShutdownTimeout time.Duration
 }
 
 func Load() Config {
@@ -17,7 +23,12 @@ func Load() Config {
 	}
 
 	return Config{
-		Port: port,
+		Port:            port,
+		DatabaseURL:     os.Getenv("DATABASE_URL"),
+		ReadTimeout:     5 * time.Second,
+		WriteTimeout:    10 * time.Second,
+		IdleTimeout:     60 * time.Second,
+		ShutdownTimeout: 5 * time.Second,
 	}
 }
 
@@ -33,6 +44,10 @@ func (c Config) Validate() error {
 
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
+	}
+
+	if c.DatabaseURL == "" {
+		return fmt.Errorf("DATABASE_URL is required")
 	}
 
 	return nil
