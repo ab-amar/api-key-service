@@ -8,10 +8,10 @@
 6. Add basic configuration for the server port
 7. Read configuration from environment variables
 8. Validate configuration at startup
+9. Add graceful shutdown support
 
 -----------------------------------------
 
-9. Add graceful shutdown support
 10. Add a root endpoint to explain what the service is
 11. Define the core API key model in `internal/model`
 12. Define a repository interface in `internal/repository`
